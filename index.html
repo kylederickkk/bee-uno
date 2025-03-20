@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bee UNO - Advanced Game</title>
+  <style>
+    /* Basic reset and body styling */
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7d859;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 20px;
+      color: #222;
+    }
+    /* Container for the game */
+    .game-container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff8dc;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    /* Current card display styling */
+    #current-card {
+      width: 100px;
+      height: 150px;
+      margin: 20px auto;
+      border-radius: 10px;
+      line-height: 150px;
+      font-size: 28px;
+      font-weight: bold;
+      color: white;
+      transition: transform 0.3s;
+    }
+    /* Player hand deck */
+    .deck {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+    /* Card styling */
+    .card {
+      width: 80px;
+      height: 120px;
+      border-radius: 10px;
+      line-height: 120px;
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.3s, opacity 0.3s;
+      position: relative;
+    }
+    .card:hover {
+      transform: scale(1.1);
+    }
+    /* Card color classes */
+    .yellow { background: linear-gradient(to bottom, #f4c542, #e69c29); }
+    .black  { background: linear-gradient(to bottom, #222, #444); }
+    .green  { background: linear-gradient(to bottom, #58b368, #1e7f38); }
+    .blue   { background: linear-gradient(to bottom, #4a90e2, #316db5); }
+    .wild   { background: linear-gradient(to bottom, #ff4500, #ffcc00); }
+    .special { background: #ff5733; }
+    /* Button styling */
+    .draw-button {
+      padding: 10px 20px;
+      font-size: 18px;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 20px;
+      transition: background 0.3s;
+    }
+    .draw-button:hover {
+      background: #444;
+    }
+    /* Game status message */
+    .status {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px;
+    }
+    /* Modal for Wild Card color selection */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 10;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background: #fff;
+      margin: 15% auto;
+      padding: 20px;
+      width: 300px;
+      border-radius: 10px;
+    }
+    .modal h2 {
+      margin-top: 0;
+    }
+    .color-option {
+      width: 50px;
+      height: 50px;
+      display: inline-block;
+      border-radius: 50%;
+      margin: 10px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border 0.3s;
+    }
+    .color-option:hover {
+      border-color: #222;
+    }
+    /* Draw animation */
+    .draw-animation {
+      animation: drawCard 0.5s ease;
+    }
+    @keyframes drawCard {
+      from { transform: translateY(-50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <h1>🐝 Bee UNO - Advanced Game</h1>
+  <div class="game-container">
+    <!-- Current card display -->
+    <div>
+      <h2>Current Card:</h2>
+      <div id="current-card">?</div>
+    </div>
+    <!-- Player's hand -->
+    <div>
+      <h3>Your Cards:</h3>
+      <div class="deck" id="player-hand"></div>
+    </div>
+    <!-- Draw card button -->
+    <button class="draw-button" id="draw-btn" onclick="game.playerDraw()">Draw a Card</button>
+    <!-- AI cards count -->
+    <div>
+      <h3>AI Cards: <span id="ai-card-count">5</span></h3>
+    </div>
+    <!-- Game status messages -->
+    <div class="status" id="game-status">Your turn!</div>
+  </div>
+
+  <!-- Modal for Wild Card color selection -->
+  <div id="wild-modal" class="modal">
+    <div class="modal-content">
+      <h2>Select a Color</h2>
+      <div id="wild-options">
+        <div class="color-option yellow" onclick="selectWildColor('yellow')"></div>
+        <div class="color-option black" onclick="selectWildColor('black')"></div>
+        <div class="color-option green" onclick="selectWildColor('green')"></div>
+        <div class="color-option blue" onclick="selectWildColor('blue')"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio for card flip sound -->
+  <audio id="card-sound" src="https://www.myinstants.com/media/sounds/card-flip.mp3"></audio>
+
+  <script>
+    // Main game class definition
+    class BeeUnoGame {
+      constructor() {
+        this.colors = ["yellow", "black", "green", "blue"];
+        // Special cards include both action and wild cards
+        this.specialCards = ["Hive Block", "Buzz Draw", "Wild Honey", "Swarm Attack"];
+        this.playerHand = [];
+        this.aiHand = [];
+        this.currentCard = null;
+        this.playerTurn = true;
+        this.gameOver = false;
+        this.init();
+      }
+
+      // Initialize the game: deal 5 cards each and set a starting card
+      init() {
+        for (let i = 0; i < 5; i++) {
+          this.playerHand.push(this.getRandomCard());
+          this.aiHand.push(this.getRandomCard());
+        }
+        this.updateAIHandCount();
+        this.currentCard = this.getRandomCard();
+        this.updateCurrentCardUI();
+        this.renderPlayerHand();
+      }
+
+      // Generate a random card (either number or special)
+      getRandomCard() {
+        let card = {};
+        // 30% chance for a special card
+        if (Math.random() < 0.3) {
+          card.number = this.specialCards[Math.floor(Math.random() * this.specialCards.length)];
+          // Wild cards have their own color
+          card.color = (card.number === "Wild Honey") ? "wild" : this.colors[Math.floor(Math.random() * this.colors.length)];
+        } else {
+          // Number card (0-9)
+          card.number = Math.floor(Math.random() * 10);
+          card.color = this.colors[Math.floor(Math.random() * this.colors.length)];
+        }
+        return card;
+      }
+
+      // Render player's hand onto the UI
+      renderPlayerHand() {
+        const handDiv = document.getElementById("player-hand");
+        handDiv.innerHTML = "";
+        this.playerHand.forEach((card, index) => {
+          const cardDiv = document.createElement("div");
+          cardDiv.classList.add("card", card.color, "draw-animation");
+          cardDiv.innerText = card.number;
+          // When clicked, attempt to play the card
+          cardDiv.onclick = () => this.playerPlayCard(index);
+          handDiv.appendChild(cardDiv);
+        });
+      }
+
+      // Update the current card display
+      updateCurrentCardUI() {
+        const currentCardDiv = document.getElementById("current-card");
+        currentCardDiv.innerText = this.currentCard.number;
+        currentCardDiv.className = "";  // Reset classes
+        currentCardDiv.classList.add(this.currentCard.color);
+      }
+
+      // Update the displayed count of AI cards
+      updateAIHandCount() {
+        document.getElementById("ai-card-count").innerText = this.aiHand.length;
+      }
+
+      // Play the card flip sound effect
+      playSound() {
+        const sound = document.getElementById("card-sound");
+        sound.currentTime = 0;
+        sound.play();
+      }
+
+      // Check if a card can be played (matching color, number, or wild)
+      canPlay(card) {
+        return (card.color === this.currentCard.color ||
+                card.number === this.currentCard.number ||
+                card.color === "wild");
+      }
+
+      // When the player clicks a card to play it
+      playerPlayCard(index) {
+        if (!this.playerTurn || this.gameOver) return;
+        const card = this.playerHand[index];
+        if (this.canPlay(card)) {
+          // Remove card from player's hand and set it as current card
+          this.currentCard = card;
+          this.playerHand.splice(index, 1);
+          this.playSound();
+          this.updateCurrentCardUI();
+          this.renderPlayerHand();
+          // Handle special cards
+          if (card.number === "Wild Honey") {
+            // Pause turn to let player select a color
+            this.playerTurn = false;
+            this.showWildModal();
+            return;
+          }
+          if (card.number === "Buzz Draw") {
+            this.drawMultipleCards("ai", 2);
+          }
+          if (card.number === "Swarm Attack") {
+            this.drawMultipleCards("ai", 4);
+          }
+          // Hive Block can be handled later in AI logic if needed
+          this.checkWin();
+          this.endTurn();
+        } else {
+          alert("Invalid move! Must match color or number.");
+        }
+      }
+
+      // Player chooses to draw a card instead of playing
+      playerDraw() {
+        if (!this.playerTurn || this.gameOver) return;
+        this.playerHand.push(this.getRandomCard());
+        this.playSound();
+        this.renderPlayerHand();
+        this.endTurn();
+      }
+
+      // Draw multiple cards for the specified target (player or ai)
+      drawMultipleCards(target, count) {
+        for (let i = 0; i < count; i++) {
+          if (target === "ai") {
+            this.aiHand.push(this.getRandomCard());
+          } else {
+            this.playerHand.push(this.getRandomCard());
+          }
+        }
+        if (target === "ai") {
+          this.updateAIHandCount();
+        } else {
+          this.renderPlayerHand();
+        }
+      }
+
+      // End player's turn and trigger AI turn after a short delay
+      endTurn() {
+        if (this.checkWin()) return;
+        this.playerTurn = false;
+        document.getElementById("game-status").innerText = "AI's turn...";
+        setTimeout(() => this.aiTurn(), 1000);
+      }
+
+      // AI turn: try to play a valid card; if none, draw a card
+      aiTurn() {
+        let playableCards = this.aiHand.filter(card => this.canPlay(card));
+        if (playableCards.length > 0) {
+          // For simplicity, choose the first valid card
+          let card = playableCards[0];
+          this.currentCard = card;
+          // Remove the card from AI hand
+          this.aiHand = this.aiHand.filter(c => c !== card);
+          this.updateCurrentCardUI();
+          this.playSound();
+          // Handle AI special cards
+          if (card.number === "Wild Honey") {
+            // Randomly choose a color for AI wild card
+            this.currentCard.color = this.colors[Math.floor(Math.random() * this.colors.length)];
+            this.updateCurrentCardUI();
+          }
+          if (card.number === "Buzz Draw") {
+            this.drawMultipleCards("player", 2);
+          }
+          if (card.number === "Swarm Attack") {
+            this.drawMultipleCards("player", 4);
+          }
+        } else {
+          // If no playable card, AI draws one
+          this.aiHand.push(this.getRandomCard());
+          this.playSound();
+        }
+        this.updateAIHandCount();
+        this.checkWin();
+        this.playerTurn = true;
+        document.getElementById("game-status").innerText = "Your turn!";
+      }
+
+      // Check for win conditions (empty hand)
+      checkWin() {
+        if (this.playerHand.length === 0) {
+          document.getElementById("game-status").innerText = "You win! Refresh to play again.";
+          this.gameOver = true;
+          return true;
+        }
+        if (this.aiHand.length === 0) {
+          document.getElementById("game-status").innerText = "AI wins! Refresh to play again.";
+          this.gameOver = true;
+          return true;
+        }
+        return false;
+      }
+
+      // Show the modal for Wild Honey color selection
+      showWildModal() {
+        document.getElementById("wild-modal").style.display = "block";
+      }
+
+      // Hide the wild card modal
+      hideWildModal() {
+        document.getElementById("wild-modal").style.display = "none";
+      }
+    }
+
+    // Create a global game instance
+    const game = new BeeUnoGame();
+
+    // Function called when a wild color is selected from the modal
+    function selectWildColor(color) {
+      game.currentCard.color = color;
+      game.updateCurrentCardUI();
+      game.hideWildModal();
+      game.endTurn();
+    }
+  </script>
+</body>
+</html>
